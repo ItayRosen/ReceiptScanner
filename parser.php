@@ -1,8 +1,10 @@
 <?php
 //this is a receipt scanner API that uses Google's Vision API platform to scan receipt and export its items, total cost and date. Currently working for English based receipts only.
 
-class parse {
+class parser {
 	
+	public $imageUri;
+	public $apiKey;
 	private $data;
 	private $rows = [];
 	private $items = [];
@@ -13,7 +15,7 @@ class parse {
 	private $total;
 	private $date;
 	
-	public function __construct() {
+	public function parse() {
 		$this -> getData(); //get json data
 		$this -> calculateMaxY(); //calculate the most distanced element (price) on Xaxis
 		$this -> parseRows(); //loop through blocks and create rows
@@ -24,12 +26,39 @@ class parse {
 		$this -> calculateTotal(); //calculate the total and remove from items
 		$this -> removeTotals(); //remove total items after total calculation
 		$this -> setDate(); //set receipt data
-		echo json_encode(array("status" => 200, "data" => array("items" => $this -> items, "total" => $this -> total, "date" => $this -> date)));
+		return json_encode(array("status" => 200, "data" => array("items" => $this -> items, "total" => $this -> total, "date" => $this -> date)));
 	}
 	
 	private function getData() {
-		$content = file_get_contents('data.txt');
-		$this -> data = json_decode($content);
+		$data = '{
+		  "requests": [
+			{
+			  "image": {
+				"source": {
+				  "imageUri": "'.$this -> imageUri.'"
+				}
+			  },
+			  "features": [
+				{
+				  "type": "TEXT_DETECTION"
+				}
+			  ]
+			}
+		  ]
+		}';
+		
+		$this -> data = $this -> request($data);
+	}
+	
+	private function request($json) {																			 
+		$ch = curl_init('https://vision.googleapis.com/v1/images:annotate?key='.$this -> apiKey);                                                                      
+		curl_setopt($ch, CURLOPT_POST, 1);
+		curl_setopt($ch, CURLOPT_POSTFIELDS, $json);                                                                  
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);                                                                      
+		curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type: application/json'));                                                                                                                   
+		$result = curl_exec($ch);
+		curl_close($ch);
+		return $result;
 	}
 	
 	private function calculateMaxY() {
@@ -186,8 +215,11 @@ class parse {
 	
 	private function error($code,$text) {
 		echo json_encode(array("status" => array("code" => $code, "text" => $text)));
-		//die;
+		die;
 	}
 }
 
-$parser = new parse();
+$parser = new parser();
+$parser -> imageUri = 'https://cloud.google.com/vision/images/rushmore.jpg';
+$parser -> apiKey = '';
+echo $parser -> parse();
